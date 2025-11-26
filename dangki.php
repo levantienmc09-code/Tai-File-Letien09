@@ -1,16 +1,8 @@
 <?php
 session_start();
 ob_start();
+require_once 'database.php';
 
-// --- Config ---
-$DATA_DIR = __DIR__.'/data';
-if(!is_dir($DATA_DIR)) mkdir($DATA_DIR,0755,true);
-
-$USERS_FILE = $DATA_DIR.'/users.json';
-if(!file_exists($USERS_FILE)) file_put_contents($USERS_FILE,'{}');
-$users = json_decode(file_get_contents($USERS_FILE), true);
-
-// --- Register ---
 $error = '';
 $success = '';
 
@@ -31,22 +23,32 @@ if(isset($_POST['action']) && $_POST['action']==='register'){
     elseif($p !== $p_confirm){
         $error="Mật khẩu xác nhận không khớp";
     }
-    elseif(isset($users[$u])){ 
-        $error="Người dùng đã tồn tại"; 
-    }
     else{
-        $hash = password_hash($p,PASSWORD_DEFAULT);
-        $token = bin2hex(random_bytes(32));
-        $users[$u] = ['pass'=>$hash,'token'=>$token];
-        if(file_put_contents($USERS_FILE,json_encode($users,JSON_PRETTY_PRINT))===false){
-            $error="Lỗi lưu thông tin người dùng!";
-        } else {
-            $success="Đăng ký thành công! Đang chuyển đến trang đăng nhập...";
-            echo "<script>setTimeout(function(){ window.location.href='dangnhap.php'; }, 2000);</script>";
+        try {
+            $db = getDatabase();
+            
+            // Kiểm tra user đã tồn tại chưa
+            $stmt = $db->prepare("SELECT id FROM users WHERE username = ?");
+            $stmt->execute([$u]);
+            if($stmt->fetch()){
+                $error="Người dùng đã tồn tại";
+            } else {
+                $hash = password_hash($p, PASSWORD_DEFAULT);
+                $token = bin2hex(random_bytes(32));
+                
+                $stmt = $db->prepare("INSERT INTO users (username, password, token) VALUES (?, ?, ?)");
+                if($stmt->execute([$u, $hash, $token])){
+                    $success="Đăng ký thành công! Đang chuyển đến trang đăng nhập...";
+                    echo "<script>setTimeout(function(){ window.location.href='dangnhap.php'; }, 2000);</script>";
+                }
+            }
+        } catch(PDOException $e) {
+            $error = "Lỗi database: " . $e->getMessage();
         }
     }
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -54,6 +56,7 @@ if(isset($_POST['action']) && $_POST['action']==='register'){
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Đăng ký - FileShare</title>
 <style>
+/* Giữ nguyên CSS cũ */
 body{font-family:Arial,sans-serif;background:#0b1220;color:#eee;text-align:center;padding-top:80px;}
 .container{display:inline-block;text-align:left;}
 .form-card{background:#111a2c;padding:30px;border-radius:12px;width:350px;}
