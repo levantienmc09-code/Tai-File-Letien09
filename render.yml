@@ -1,10 +1,12 @@
 services:
   - type: web
     name: fileshare
-    env: php
+    env: docker
     plan: free
-    buildCommand: "chmod -R 755 . && mkdir -p data && chmod 755 data"
-    startCommand: "php -S 0.0.0.0:8000 index.php"
+    docker:
+      dockerfilePath: Dockerfile
     envVars:
-      - key: PHP_VERSION
-        value: 8.2
+      - key: PHP_ENV
+        value: production
+    healthCheckPath: /
+    autoDeploy: true
