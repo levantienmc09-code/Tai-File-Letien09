@@ -48,23 +48,38 @@ function formatTime($timestamp) {
 body{font-family:Arial,sans-serif;background:#0b1220;color:#eee;text-align:center;padding-top:60px;}
 h1{margin-bottom:40px;font-size:36px;color:#60a5fa;}
 .tagline{font-size:18px;color:#94a3b8;margin-bottom:40px;}
-button{padding:15px 35px;margin:15px;font-size:18px;border:none;border-radius:8px;background:#1e3a8a;color:white;cursor:pointer;transition:0.2s;}
-button:hover{background:#2563eb;}
+.nav-buttons a{text-decoration:none;display:inline-block;}
+.clickable-button {
+    padding: 15px 35px;
+    margin: 15px;
+    font-size: 18px;
+    border: none;
+    border-radius: 8px;
+    background: #1e3a8a;
+    color: white;
+    cursor: pointer;
+    transition: 0.2s;
+    text-decoration: none;
+    display: inline-block;
+}
+.clickable-button:hover {
+    background: #2563eb;
+}
 .features{display:flex;justify-content:center;flex-wrap:wrap;margin:40px 0;}
 .feature-item{background:#111a2c;padding:20px;margin:10px;border-radius:8px;width:200px;}
 .feature-icon{font-size:24px;margin-bottom:10px;}
 .public-files{margin-top:40px;text-align:left;display:inline-block;}
 .public-file-item{background:#111a2c;padding:15px;margin:10px;border-radius:8px;width:400px;}
-.nav-buttons{margin-top:30px;}
 </style>
 </head>
 <body>
 <h1>📁 FileShare</h1>
 <div class="tagline">Chia sẻ file công khai và riêng tư an toàn</div>
 
+<!-- SỬA PHẦN NÀY -->
 <div class="nav-buttons">
-    <button onclick="window.location.href='dangki.php'">📝 Đăng ký</button>
-    <button onclick="window.location.href='dangnhap.php'">🔐 Đăng nhập</button>
+    <a href="dangki.php" class="clickable-button">📝 Đăng ký</a>
+    <a href="dangnhap.php" class="clickable-button">🔐 Đăng nhập</a>
 </div>
 
 <div class="features">
@@ -97,7 +112,7 @@ button:hover{background:#2563eb;}
             Lượt tải: <?=$file['download_count']?> |
             Upload: <?=formatTime($file['upload_time'])?>
         </div>
-        <a href="?download=<?=$file['id']?>" style="color:#60a5fa;">⬇️ Tải xuống</a>
+        <a href="index.php?download=<?=$file['id']?>" style="color:#60a5fa;">⬇️ Tải xuống</a>
     </div>
     <?php endforeach; ?>
 </div>
