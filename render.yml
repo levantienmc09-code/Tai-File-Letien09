@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: my-php-app
+    env: php
+    plan: free
+    buildCommand: "chmod -R 755 storage bootstrap/cache && composer install --no-dev"
+    startCommand: "php -S 0.0.0.0:8000"
+    envVars:
+      - key: PHP_VERSION
+        value: "8.2"
