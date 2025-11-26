@@ -1,12 +1,5 @@
 {
-    "name": "vendor/my-php-app",
-    "type": "project", 
     "require": {
         "php": "^8.0"
-    },
-    "require-dev": {
-        "ext-json": "*",
-        "ext-mbstring": "*",
-        "ext-curl": "*"
     }
 }
