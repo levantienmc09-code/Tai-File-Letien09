@@ -1,12 +1,13 @@
 services:
   - type: web
     name: fileshare
-    env: docker
+    env: php
     plan: free
-    docker:
-      dockerfilePath: Dockerfile
-    envVars:
-      - key: PHP_ENV
-        value: production
-    healthCheckPath: /
-    autoDeploy: true
+    buildCommand: |
+      mkdir -p data
+      chmod 755 data
+    startCommand: "php -S 0.0.0.0:10000 index.php"
+    disk:
+      name: data
+      mountPath: /var/www/html/data
+      sizeGB: 1
