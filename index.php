@@ -26,8 +26,23 @@ if(!isset($_SESSION['user']) && isset($_COOKIE['remember_user']) && isset($_COOK
 if(isset($_POST['action']) && $_POST['action']==='register'){
     $u = preg_replace('/[^a-zA-Z0-9_\-]/','', $_POST['username']);
     $p = $_POST['password'];
-    if(!$u || !$p){ $error="Vui lòng nhập đầy đủ thông tin"; }
-    elseif(isset($users[$u])){ $error="Người dùng đã tồn tại"; }
+    $p_confirm = $_POST['password_confirm'];
+    
+    if(!$u || !$p){ 
+        $error="Vui lòng nhập đầy đủ thông tin"; 
+    }
+    elseif(strlen($u) < 3){
+        $error="Tên đăng nhập phải có ít nhất 3 ký tự";
+    }
+    elseif(strlen($p) < 6){
+        $error="Mật khẩu phải có ít nhất 6 ký tự";
+    }
+    elseif($p !== $p_confirm){
+        $error="Mật khẩu xác nhận không khớp";
+    }
+    elseif(isset($users[$u])){ 
+        $error="Người dùng đã tồn tại"; 
+    }
     else{
         $hash = password_hash($p,PASSWORD_DEFAULT);
         $token = bin2hex(random_bytes(32));
@@ -35,7 +50,10 @@ if(isset($_POST['action']) && $_POST['action']==='register'){
         if(file_put_contents($USERS_FILE,json_encode($users,JSON_PRETTY_PRINT))===false){
             $error="Lỗi lưu thông tin người dùng!";
         } else {
-            $success="Đăng ký thành công! Bây giờ đăng nhập nhé.";
+            $_SESSION['register_success'] = true;
+            $_SESSION['registered_username'] = $u;
+            header("Location: register_success.php");
+            exit;
         }
     }
 }
@@ -48,8 +66,11 @@ if(isset($_POST['action']) && $_POST['action']==='login'){
         $_SESSION['user'] = $u;
         setcookie('remember_user',$u,time()+60*60*24*365*10,'/');
         setcookie('remember_token',$users[$u]['token'],time()+60*60*24*365*10,'/');
-        header("Location: ".$_SERVER['PHP_SELF']); exit;
-    } else { $error="Đăng nhập thất bại"; }
+        header("Location: ".$_SERVER['PHP_SELF']); 
+        exit;
+    } else { 
+        $error="Đăng nhập thất bại. Kiểm tra lại tên đăng nhập và mật khẩu"; 
+    }
 }
 
 // --- Logout ---
@@ -57,7 +78,8 @@ if(isset($_GET['logout'])){
     session_destroy();
     setcookie('remember_user','',time()-3600,'/');
     setcookie('remember_token','',time()-3600,'/');
-    header("Location: ".$_SERVER['PHP_SELF']); exit;
+    header("Location: ".$_SERVER['PHP_SELF']); 
+    exit;
 }
 
 // --- User logged in ---
@@ -67,42 +89,64 @@ $user = $_SESSION['user'] ?? null;
 $files_data = json_decode(file_get_contents($FILES_DB), true) ?? [];
 
 // --- Handle File Upload ---
-if($user && isset($_FILES['upload_file']) && $_FILES['upload_file']['error'] === UPLOAD_ERR_OK){
-    $upload = $_FILES['upload_file'];
-    $filename = preg_replace('/[^a-zA-Z0-9_\-\.]/','', $upload['name']);
-    $file_type = $_POST['file_type'] ?? 'private';
-    $file_password = $_POST['file_password'] ?? '';
-    
-    // Kiểm tra kích thước file (tối đa 100MB)
-    $max_file_size = 100 * 1024 * 1024;
-    if($upload['size'] > $max_file_size){
-        $error = "File quá lớn! Kích thước tối đa là 100MB";
-    } else {
-        $file_id = uniqid();
-        $file_path = $DATA_DIR.'/'.$file_id.'_'.$filename;
+if($user && isset($_POST['upload_submit'])){
+    if(isset($_FILES['upload_file']) && $_FILES['upload_file']['error'] === UPLOAD_ERR_OK){
+        $upload = $_FILES['upload_file'];
+        $filename = preg_replace('/[^a-zA-Z0-9_\-\.]/','', $upload['name']);
+        $file_type = $_POST['file_type'] ?? 'private';
+        $file_password = $_POST['file_password'] ?? '';
         
-        if(move_uploaded_file($upload['tmp_name'], $file_path)){
-            // Lưu thông tin file vào database
-            $file_info = [
-                'id' => $file_id,
-                'filename' => $filename,
-                'original_name' => $filename,
-                'owner' => $user,
-                'type' => $file_type,
-                'password' => $file_password ? password_hash($file_password, PASSWORD_DEFAULT) : '',
-                'size' => $upload['size'],
-                'upload_time' => time(),
-                'download_count' => 0
-            ];
-            
-            $files_data[] = $file_info;
-            file_put_contents($FILES_DB, json_encode($files_data, JSON_PRETTY_PRINT));
-            
-            $success = "Tải lên file thành công: $filename";
-            header("Location: ".$_SERVER['PHP_SELF']); exit;
+        // Kiểm tra file name
+        if(empty($filename)){
+            $error = "Tên file không hợp lệ";
         } else {
-            $error = "Lỗi khi tải lên file";
+            // Kiểm tra kích thước file (tối đa 100MB)
+            $max_file_size = 100 * 1024 * 1024;
+            if($upload['size'] > $max_file_size){
+                $error = "File quá lớn! Kích thước tối đa là 100MB";
+            } else {
+                $file_id = uniqid();
+                $file_path = $DATA_DIR.'/'.$file_id.'_'.$filename;
+                
+                if(move_uploaded_file($upload['tmp_name'], $file_path)){
+                    // Lưu thông tin file vào database
+                    $file_info = [
+                        'id' => $file_id,
+                        'filename' => $filename,
+                        'original_name' => $filename,
+                        'owner' => $user,
+                        'type' => $file_type,
+                        'password' => $file_password ? password_hash($file_password, PASSWORD_DEFAULT) : '',
+                        'size' => $upload['size'],
+                        'upload_time' => time(),
+                        'download_count' => 0
+                    ];
+                    
+                    $files_data[] = $file_info;
+                    if(file_put_contents($FILES_DB, json_encode($files_data, JSON_PRETTY_PRINT))){
+                        $success = "✅ Tải lên file thành công: $filename";
+                        // Reload files data
+                        $files_data = json_decode(file_get_contents($FILES_DB), true) ?? [];
+                    } else {
+                        $error = "❌ Lỗi khi lưu thông tin file";
+                    }
+                } else {
+                    $error = "❌ Lỗi khi tải lên file. Kiểm tra quyền ghi thư mục";
+                }
+            }
         }
+    } else {
+        $error_code = $_FILES['upload_file']['error'] ?? 'unknown';
+        $error_messages = [
+            UPLOAD_ERR_INI_SIZE => "File vượt quá kích thước cho phép",
+            UPLOAD_ERR_FORM_SIZE => "File vượt quá kích thước form",
+            UPLOAD_ERR_PARTIAL => "File chỉ được tải lên một phần",
+            UPLOAD_ERR_NO_FILE => "Không có file được chọn",
+            UPLOAD_ERR_NO_TMP_DIR => "Thiếu thư mục tạm",
+            UPLOAD_ERR_CANT_WRITE => "Không thể ghi file",
+            UPLOAD_ERR_EXTENSION => "PHP extension dừng upload"
+        ];
+        $error = $error_messages[$error_code] ?? "Lỗi upload file (Code: $error_code)";
     }
 }
 
@@ -163,6 +207,7 @@ if(isset($_GET['download'])){
                             <br>
                             <button type="submit">🔓 Mở khóa và Tải</button>
                         </form>
+                        <p style="margin-top:15px;"><a href="<?=$_SERVER['PHP_SELF']?>" style="color:#60a5fa;">← Quay lại</a></p>
                     </div>
                 </body>
                 </html>
@@ -214,10 +259,14 @@ if(isset($_GET['del']) && $user){
             if(file_exists($file_path)) unlink($file_path);
             unset($files_data[$key]);
             file_put_contents($FILES_DB, json_encode(array_values($files_data), JSON_PRETTY_PRINT));
+            $success = "✅ Đã xóa file thành công";
+            // Reload files data
+            $files_data = json_decode(file_get_contents($FILES_DB), true) ?? [];
             break;
         }
     }
-    header("Location: ".$_SERVER['PHP_SELF']); exit;
+    header("Location: ".$_SERVER['PHP_SELF']); 
+    exit;
 }
 
 // --- Lấy file của user ---
@@ -264,15 +313,17 @@ h1{margin-bottom:40px;font-size:36px;color:#60a5fa;}
 .tagline{font-size:18px;color:#94a3b8;margin-bottom:40px;}
 button{padding:15px 35px;margin:15px;font-size:18px;border:none;border-radius:8px;background:#1e3a8a;color:white;cursor:pointer;transition:0.2s;}
 button:hover{background:#2563eb;}
-form{margin-top:20px; display:inline-block; text-align:left; background:#111a2c; padding:25px; border-radius:12px; width:300px;}
-input[type=text], input[type=password]{padding:10px; width:100%; margin:8px 0; border-radius:6px; border:1px solid #1e3a8a; background:#0f172a; color:#fff;}
-p.error{color:#f87171;}
-p.success{color:#4ade80;}
+form{margin-top:20px; display:inline-block; text-align:left; background:#111a2c; padding:25px; border-radius:12px; width:320px;}
+input[type=text], input[type=password]{padding:12px; width:100%; margin:8px 0; border-radius:6px; border:1px solid #1e3a8a; background:#0f172a; color:#fff; box-sizing:border-box;}
+p.error{color:#f87171;background:#7f1d1d33;padding:10px;border-radius:6px;}
+p.success{color:#4ade80;background:#064e3b33;padding:10px;border-radius:6px;}
 .features{display:flex;justify-content:center;flex-wrap:wrap;margin:40px 0;}
 .feature-item{background:#111a2c;padding:20px;margin:10px;border-radius:8px;width:200px;}
 .feature-icon{font-size:24px;margin-bottom:10px;}
 .public-files{margin-top:40px;text-align:left;display:inline-block;}
 .public-file-item{background:#111a2c;padding:15px;margin:10px;border-radius:8px;width:400px;}
+.form-group{margin-bottom:15px;}
+.form-group label{display:block;margin-bottom:5px;color:#94a3b8;}
 </style>
 </head>
 <body>
@@ -282,8 +333,8 @@ p.success{color:#4ade80;}
 <?php if(isset($error)) echo "<p class='error'>$error</p>"; ?>
 <?php if(isset($success)) echo "<p class='success'>$success</p>"; ?>
 
-<button onclick="document.getElementById('login').style.display='block';document.getElementById('register').style.display='none'">Đăng nhập</button>
-<button onclick="document.getElementById('register').style.display='block';document.getElementById('login').style.display='none'">Đăng ký</button>
+<button onclick="showForm('login')">Đăng nhập</button>
+<button onclick="showForm('register')">Đăng ký</button>
 
 <div class="features">
     <div class="feature-item">
@@ -321,23 +372,61 @@ p.success{color:#4ade80;}
 </div>
 <?php endif; ?>
 
-<div id="login" style="display:none;margin-top:20px;">
+<div id="login-form" class="form-container" style="display:none;margin-top:20px;">
 <form method="post">
 <input type="hidden" name="action" value="login">
-Tên đăng nhập:<br><input type="text" name="username" placeholder="Nhập tên đăng nhập" required><br>
-Mật khẩu:<br><input type="password" name="password" placeholder="Nhập mật khẩu" required><br><br>
-<button type="submit">Đăng nhập</button>
+<div class="form-group">
+    <label>Tên đăng nhập:</label>
+    <input type="text" name="username" placeholder="Nhập tên đăng nhập" required>
+</div>
+<div class="form-group">
+    <label>Mật khẩu:</label>
+    <input type="password" name="password" placeholder="Nhập mật khẩu" required>
+</div>
+<button type="submit" style="width:100%;">Đăng nhập</button>
 </form>
 </div>
 
-<div id="register" style="display:none;margin-top:20px;">
+<div id="register-form" class="form-container" style="display:none;margin-top:20px;">
 <form method="post">
 <input type="hidden" name="action" value="register">
-Tên đăng nhập:<br><input type="text" name="username" placeholder="Tên đăng nhập mới" required><br>
-Mật khẩu:<br><input type="password" name="password" placeholder="Mật khẩu mới" required><br><br>
-<button type="submit">Đăng ký</button>
+<div class="form-group">
+    <label>Tên đăng nhập:</label>
+    <input type="text" name="username" placeholder="Tên đăng nhập (ít nhất 3 ký tự)" required minlength="3">
+</div>
+<div class="form-group">
+    <label>Mật khẩu:</label>
+    <input type="password" name="password" placeholder="Mật khẩu (ít nhất 6 ký tự)" required minlength="6">
+</div>
+<div class="form-group">
+    <label>Xác nhận mật khẩu:</label>
+    <input type="password" name="password_confirm" placeholder="Nhập lại mật khẩu" required>
+</div>
+<button type="submit" style="width:100%;">Đăng ký</button>
 </form>
 </div>
+
+<script>
+function showForm(formType) {
+    // Ẩn tất cả form
+    document.querySelectorAll('.form-container').forEach(form => {
+        form.style.display = 'none';
+    });
+    
+    // Hiển thị form được chọn
+    document.getElementById(formType + '-form').style.display = 'block';
+    
+    // Scroll đến form
+    document.getElementById(formType + '-form').scrollIntoView({ behavior: 'smooth' });
+}
+
+// Xử lý lỗi từ URL parameters
+const urlParams = new URLSearchParams(window.location.search);
+if(urlParams.get('error')) {
+    showForm('login');
+    document.querySelector('.error').scrollIntoView({ behavior: 'smooth' });
+}
+</script>
 </body>
 </html>
 <?php exit; endif; ?>
@@ -353,8 +442,8 @@ body{font-family:Arial,sans-serif;background:#0b1220;color:#eee;margin:0;padding
 h2{display:flex;justify-content:space-between;align-items:center;}
 a.logout{color:#f87171;text-decoration:none;font-weight:bold;}
 a.logout:hover{text-decoration:underline;}
-input[type=file], input[type=text], input[type=password], select{width:100%;padding:10px;border-radius:6px;border:1px solid #1e3a8a;background:#111a2c;color:#fff;margin-bottom:10px;}
-button{padding:8px 15px;margin-top:10px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;transition:0.2s;}
+input[type=file], input[type=text], input[type=password], select{width:100%;padding:12px;border-radius:6px;border:1px solid #1e3a8a;background:#111a2c;color:#fff;margin-bottom:10px;box-sizing:border-box;}
+button{padding:12px 20px;margin-top:10px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;transition:0.2s;font-size:16px;}
 button:hover{background:#3b82f6;}
 table{width:100%;border-collapse:collapse;margin-top:20px;}
 th,td{border:1px solid #1e3a8a;padding:12px;text-align:left;}
@@ -362,26 +451,30 @@ th{background:#1e3a8a;color:#fff;}
 tr:hover{background:#1e3a8a33;}
 a{color:#4ade80;text-decoration:none;font-weight:bold;}
 a:hover{color:#60a5fa;}
-.card{background:#111a2c;padding:20px;border-radius:12px;margin-top:20px;}
+.card{background:#111a2c;padding:25px;border-radius:12px;margin-top:20px;}
 .upload-info{font-size:14px;color:#94a3b8;margin-top:5px;}
 .file-icon{font-size:16px;margin-right:8px;}
 .file-size{color:#94a3b8;font-size:12px;}
 .file-date{color:#94a3b8;font-size:12px;}
 .stats{display:flex;justify-content:space-around;text-align:center;margin:20px 0;}
-.stat-item{background:#1e293b;padding:15px;border-radius:8px;flex:1;margin:0 10px;}
+.stat-item{background:#1e293b;padding:20px;border-radius:8px;flex:1;margin:0 10px;}
 .stat-number{font-size:24px;font-weight:bold;color:#60a5fa;}
 .stat-label{font-size:14px;color:#94a3b8;}
 .type-public{color:#4ade80;}
 .type-private{color:#fbbf24;}
-.link-box{background:#1e293b;padding:8px;border-radius:4px;font-family:monospace;font-size:12px;margin:5px 0;word-break:break-all;}
+.link-box{background:#1e293b;padding:10px;border-radius:4px;font-family:monospace;font-size:12px;margin:5px 0;word-break:break-all;}
+.form-group{margin-bottom:15px;}
+.form-group label{display:block;margin-bottom:5px;color:#94a3b8;}
+.alert-error{color:#f87171;background:#7f1d1d33;padding:12px;border-radius:6px;margin:10px 0;}
+.alert-success{color:#4ade80;background:#064e3b33;padding:12px;border-radius:6px;margin:10px 0;}
 @media(max-width:600px){table, th, td{font-size:14px;padding:8px;} button{width:100%;} .stats{flex-direction:column;} .stat-item{margin:5px 0;}}
 </style>
 </head>
 <body>
 <h2>📁 FileShare - <?=$user?> <a class="logout" href="?logout">Đăng xuất</a></h2>
 
-<?php if(isset($error)) echo "<p class='error'>$error</p>"; ?>
-<?php if(isset($success)) echo "<p class='success'>$success</p>"; ?>
+<?php if(isset($error)) echo "<div class='alert-error'>$error</div>"; ?>
+<?php if(isset($success)) echo "<div class='alert-success'>$success</div>"; ?>
 
 <!-- Thống kê -->
 <div class="stats">
@@ -412,27 +505,34 @@ a:hover{color:#60a5fa;}
 <!-- Upload form -->
 <div class="card">
 <h3>📤 Tải lên file mới</h3>
-<form method="post" enctype="multipart/form-data">
-    <input type="file" name="upload_file" required>
+<form method="post" enctype="multipart/form-data" onsubmit="return validateUpload()">
+    <div class="form-group">
+        <label>Chọn file:</label>
+        <input type="file" name="upload_file" id="upload_file" required>
+    </div>
     
-    <select name="file_type" id="file_type" onchange="togglePasswordField()">
-        <option value="private">🔒 Riêng tư (cần mật khẩu)</option>
-        <option value="public">🌐 Công khai (ai cũng tải được)</option>
-    </select>
+    <div class="form-group">
+        <label>Loại file:</label>
+        <select name="file_type" id="file_type" onchange="togglePasswordField()">
+            <option value="private">🔒 Riêng tư (cần mật khẩu)</option>
+            <option value="public">🌐 Công khai (ai cũng tải được)</option>
+        </select>
+    </div>
     
-    <div id="password_field">
-        <input type="password" name="file_password" placeholder="Mật khẩu bảo vệ file" required>
+    <div class="form-group" id="password_field">
+        <label>Mật khẩu bảo vệ:</label>
+        <input type="password" name="file_password" id="file_password" placeholder="Mật khẩu bảo vệ file" required>
     </div>
     
     <div class="upload-info">📝 Hỗ trợ mọi loại file, kích thước tối đa: 100MB</div>
-    <button type="submit">🚀 Tải lên ngay</button>
+    <button type="submit" name="upload_submit">🚀 Tải lên ngay</button>
 </form>
 </div>
 
 <!-- Danh sách file -->
 <div class="card">
-<h3>📂 File của bạn</h3>
-<?php if(count($user_files)==0){ echo "<p>Chưa có file nào được tải lên</p>"; } else { ?>
+<h3>📂 File của bạn (<?=count($user_files)?> file)</h3>
+<?php if(count($user_files)==0){ echo "<p>Chưa có file nào được tải lên. Hãy tải lên file đầu tiên!</p>"; } else { ?>
 <table>
 <tr>
     <th>Tên file</th>
@@ -440,7 +540,7 @@ a:hover{color:#60a5fa;}
     <th>Kích thước</th>
     <th>Lượt tải</th>
     <th>Link download</th>
-    <th>Xóa</th>
+    <th>Thao tác</th>
 </tr>
 <?php foreach($user_files as $file): ?>
 <tr>
@@ -472,11 +572,13 @@ a:hover{color:#60a5fa;}
 <td style="text-align:center;"><?=$file['download_count']?></td>
 <td>
     <div class="link-box">
-        <?=$_SERVER['HTTP_HOST']?>?download=<?=$file['id']?>
+        <?=$_SERVER['HTTP_HOST']?><?=$_SERVER['PHP_SELF']?>?download=<?=$file['id']?>
     </div>
     <a href="?download=<?=$file['id']?>" target="_blank">⬇️ Tải xuống</a>
 </td>
-<td><a href="?del=<?=$file['id']?>" onclick="return confirm('Bạn có chắc muốn xóa file này?')">🗑️ Xóa</a></td>
+<td>
+    <a href="?del=<?=$file['id']?>" onclick="return confirm('Bạn có chắc muốn xóa file <?=htmlspecialchars($file['original_name'])?>?')" style="color:#f87171;">🗑️ Xóa</a>
+</td>
 </tr>
 <?php endforeach; ?>
 </table>
@@ -487,12 +589,43 @@ a:hover{color:#60a5fa;}
 function togglePasswordField() {
     const fileType = document.getElementById('file_type').value;
     const passwordField = document.getElementById('password_field');
+    const filePassword = document.getElementById('file_password');
     
     if (fileType === 'public') {
         passwordField.style.display = 'none';
+        filePassword.removeAttribute('required');
     } else {
         passwordField.style.display = 'block';
+        filePassword.setAttribute('required', 'required');
     }
+}
+
+function validateUpload() {
+    const fileInput = document.getElementById('upload_file');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        alert('Vui lòng chọn file để tải lên');
+        return false;
+    }
+    
+    // Kiểm tra kích thước file (100MB)
+    const maxSize = 100 * 1024 * 1024;
+    if (file.size > maxSize) {
+        alert('File quá lớn! Kích thước tối đa là 100MB');
+        return false;
+    }
+    
+    // Kiểm tra mật khẩu cho file private
+    const fileType = document.getElementById('file_type').value;
+    const filePassword = document.getElementById('file_password').value;
+    
+    if (fileType === 'private' && filePassword.length < 1) {
+        alert('Vui lòng nhập mật khẩu bảo vệ cho file riêng tư');
+        return false;
+    }
+    
+    return true;
 }
 
 // Khởi tạo trạng thái ban đầu
