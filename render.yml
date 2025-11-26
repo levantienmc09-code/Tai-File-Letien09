@@ -1,10 +1,10 @@
 services:
   - type: web
-    name: my-php-app
+    name: fileshare
     env: php
     plan: free
-    buildCommand: "chmod -R 755 storage bootstrap/cache && composer install --no-dev"
-    startCommand: "php -S 0.0.0.0:8000"
+    buildCommand: "chmod -R 755 . && mkdir -p data && chmod 755 data"
+    startCommand: "php -S 0.0.0.0:8000 index.php"
     envVars:
       - key: PHP_VERSION
-        value: "8.2"
+        value: 8.2
